@@ -5,6 +5,7 @@ import 'home/home_screen.dart';
 import 'search/search_screen.dart';
 import 'profile/profile_screen.dart';
 import 'community/community_screen.dart';
+import 'friends/friend_list_screen.dart'; // 追加
 import '../config/theme.dart';
 
 class MainScreen extends StatefulWidget {
@@ -20,8 +21,9 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),      // 掲示板
     const SearchScreen(),    // 検索
-    const ProfileScreen(),   // マイページ
     const CommunityScreen(), // みんなで語る
+    const FriendListScreen(), // フレンド（追加）
+    const ProfileScreen(),   // マイページ
   ];
 
   final List<NavigationDestination> _destinations = const [
@@ -36,14 +38,19 @@ class _MainScreenState extends State<MainScreen> {
       label: '検索',
     ),
     NavigationDestination(
-      icon: Icon(Icons.person_outline),
-      selectedIcon: Icon(Icons.person),
-      label: 'マイページ',
-    ),
-    NavigationDestination(
       icon: Icon(Icons.forum_outlined),
       selectedIcon: Icon(Icons.forum),
       label: 'みんなで語る',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.people_outline),
+      selectedIcon: Icon(Icons.people),
+      label: 'フレンド',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.person_outline),
+      selectedIcon: Icon(Icons.person),
+      label: 'マイページ',
     ),
   ];
 

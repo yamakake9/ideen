@@ -2,9 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../config/theme.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/auth_provider.dart' as app_auth;
 import '../../utils/constants.dart';
+import '../../models/friend_model.dart';
+import 'contact_edit_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -18,31 +27,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _usernameController = TextEditingController();
   final _bioController = TextEditingController();
   
-  // SNS ID用のコントローラー
-  final _lineIdController = TextEditingController();
-  final _tiktokIdController = TextEditingController();
-  final _kakaoTalkIdController = TextEditingController();
-  final _instagramIdController = TextEditingController();
-  final _telegramIdController = TextEditingController();
-  final _signalIdController = TextEditingController();
-  final _phoneNumberController = TextEditingController();
-  final _contactEmailController = TextEditingController();
-  
   String _selectedGender = '未設定';
   String _selectedPrefecture = '未設定';
   String _selectedAgeGroup = '未設定';
   List<String> _selectedHobbies = [];
   bool _isLoading = false;
-  bool _showSnsIds = false; // SNS ID入力欄の表示切り替え
+  
+  // 連絡先情報の状態
+  int _publicContactCount = 0;
+  int _friendsOnlyContactCount = 0;
+  int _privateContactCount = 0;
+  
+  // プロフィール画像
+  File? _imageFile;
+  XFile? _webImageFile;
+  String? _currentPhotoUrl;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadContactStatus();
   }
 
   void _loadUserData() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
     final userData = authProvider.userData;
     
     if (userData != null) {
@@ -52,16 +62,57 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _selectedPrefecture = userData['prefecture'] ?? '未設定';
       _selectedAgeGroup = userData['ageGroup'] ?? '未設定';
       _selectedHobbies = List<String>.from(userData['hobbies'] ?? []);
+      _currentPhotoUrl = userData['photoUrl'];
+    }
+  }
+
+  void _loadContactStatus() async {
+          final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.uid;
+    if (userId == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
       
-      // SNS IDsの読み込み
-      _lineIdController.text = userData['lineId'] ?? '';
-      _tiktokIdController.text = userData['tiktokId'] ?? '';
-      _kakaoTalkIdController.text = userData['kakaoTalkId'] ?? '';
-      _instagramIdController.text = userData['instagramId'] ?? '';
-      _telegramIdController.text = userData['telegramId'] ?? '';
-      _signalIdController.text = userData['signalId'] ?? '';
-      _phoneNumberController.text = userData['phoneNumber'] ?? '';
-      _contactEmailController.text = userData['contactEmail'] ?? '';
+      final data = doc.data();
+      if (data != null && data['contactInfo'] != null) {
+        final contactInfo = ContactInfo.fromMap(data['contactInfo']);
+        
+        int publicCount = 0;
+        int friendsOnlyCount = 0;
+        int privateCount = 0;
+        
+        // 各連絡先の公開設定をカウント
+        void countVisibility(ContactVisibility? visibility) {
+          if (visibility == ContactVisibility.public) publicCount++;
+          else if (visibility == ContactVisibility.friendsOnly) friendsOnlyCount++;
+          else if (visibility == ContactVisibility.private) privateCount++;
+        }
+        
+        countVisibility(contactInfo.lineVisibility);
+        countVisibility(contactInfo.instagramVisibility);
+        countVisibility(contactInfo.xVisibility);
+        countVisibility(contactInfo.tiktokVisibility);
+        countVisibility(contactInfo.discordVisibility);
+        countVisibility(contactInfo.kakaoVisibility);
+        countVisibility(contactInfo.telegramVisibility);
+        countVisibility(contactInfo.signalVisibility);
+        countVisibility(contactInfo.phoneVisibility);
+        countVisibility(contactInfo.emailVisibility);
+        
+        if (mounted) {
+          setState(() {
+            _publicContactCount = publicCount;
+            _friendsOnlyContactCount = friendsOnlyCount;
+            _privateContactCount = privateCount;
+          });
+        }
+      }
+    } catch (e) {
+      print('連絡先情報の読み込みエラー: $e');
     }
   }
 
@@ -69,15 +120,108 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void dispose() {
     _usernameController.dispose();
     _bioController.dispose();
-    _lineIdController.dispose();
-    _tiktokIdController.dispose();
-    _kakaoTalkIdController.dispose();
-    _instagramIdController.dispose();
-    _telegramIdController.dispose();
-    _signalIdController.dispose();
-    _phoneNumberController.dispose();
-    _contactEmailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      // Firebase Storageが利用可能か確認
+      print('Firebase Storage instance: ${FirebaseStorage.instance}');
+      print('Firebase Auth current user: ${FirebaseAuth.instance.currentUser?.uid}');
+      
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 500,
+        maxHeight: 500,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          if (kIsWeb) {
+            _webImageFile = pickedFile;
+          } else {
+            _imageFile = File(pickedFile.path);
+          }
+        });
+      }
+    } catch (e) {
+      print('Image picker error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('画像の選択に失敗しました: $e')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _uploadImage() async {
+    if (!kIsWeb && _imageFile == null) return _currentPhotoUrl;
+    if (kIsWeb && _webImageFile == null) return _currentPhotoUrl;
+
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final userId = authProvider.user?.uid ?? FirebaseAuth.instance.currentUser?.uid;
+    
+    print('Current user ID from Provider: ${authProvider.user?.uid}');
+    print('Current user ID from FirebaseAuth: ${FirebaseAuth.instance.currentUser?.uid}');
+    print('Auth user email: ${authProvider.user?.email}');
+    
+    if (userId == null) {
+      print('User ID is null!');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ユーザーが認証されていません')),
+      );
+      return null;
+    }
+
+    try {
+      // Firebase Storageにアップロード
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = '${userId}_$timestamp.jpg';
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_profiles/$fileName');
+
+      print('Uploading to path: user_profiles/$fileName');
+      print('User ID: $userId');
+      print('Storage reference: ${storageRef.fullPath}');
+
+      UploadTask uploadTask;
+      
+      if (kIsWeb && _webImageFile != null) {
+        // Web環境の場合
+        final bytes = await _webImageFile!.readAsBytes();
+        print('Image size: ${bytes.length} bytes');
+        uploadTask = storageRef.putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+      } else if (_imageFile != null) {
+        // モバイル環境の場合
+        uploadTask = storageRef.putFile(
+          _imageFile!,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+      } else {
+        return null;
+      }
+
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      
+      return downloadUrl;
+    } catch (e) {
+      print('Upload error details: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('画像のアップロードに失敗しました: $e'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return null;
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -86,7 +230,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _isLoading = true;
       });
 
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+      
+      // 画像をアップロード
+      String? photoUrl = await _uploadImage();
       
       final profileData = {
         'username': _usernameController.text.trim(),
@@ -95,15 +242,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'prefecture': _selectedPrefecture,
         'ageGroup': _selectedAgeGroup,
         'hobbies': _selectedHobbies,
-        // SNS IDs
-        'lineId': _lineIdController.text.trim(),
-        'tiktokId': _tiktokIdController.text.trim(),
-        'kakaoTalkId': _kakaoTalkIdController.text.trim(),
-        'instagramId': _instagramIdController.text.trim(),
-        'telegramId': _telegramIdController.text.trim(),
-        'signalId': _signalIdController.text.trim(),
-        'phoneNumber': _phoneNumberController.text.trim(),
-        'contactEmail': _contactEmailController.text.trim(),
+        if (photoUrl != null) 'photoUrl': photoUrl,
       };
 
       final success = await authProvider.updateUserProfile(profileData);
@@ -129,24 +268,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
       }
     }
-  }
-
-  Widget _buildSnsIdField({
-    required String label,
-    required TextEditingController controller,
-    required IconData icon,
-    String? hint,
-    TextInputType? keyboardType,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon),
-      ),
-    );
   }
 
   @override
@@ -182,20 +303,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             Center(
               child: Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
-                    child: Text(
-                      _usernameController.text.isNotEmpty
-                          ? _usernameController.text[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ),
+                  kIsWeb && _webImageFile != null
+                      ? FutureBuilder<Uint8List>(
+                          future: _webImageFile!.readAsBytes(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              return CircleAvatar(
+                                radius: 50,
+                                backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                                backgroundImage: MemoryImage(snapshot.data!),
+                              );
+                            }
+                            return CircleAvatar(
+                              radius: 50,
+                              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                              child: const CircularProgressIndicator(),
+                            );
+                          },
+                        )
+                      : CircleAvatar(
+                          radius: 50,
+                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.2),
+                          backgroundImage: _getImageProvider(),
+                          child: _shouldShowInitial()
+                              ? Text(
+                                  _usernameController.text.isNotEmpty
+                                      ? _usernameController.text[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    fontSize: 40,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                )
+                              : null,
+                        ),
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -214,9 +356,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           size: 20,
                           color: Colors.white,
                         ),
-                        onPressed: () {
-                          // TODO: 画像選択機能
-                        },
+                        onPressed: _pickImage,
                       ),
                     ),
                   ),
@@ -361,17 +501,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       }
                     });
                   },
-                  selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+                  selectedColor: AppTheme.primaryColor.withValues(alpha: 0.2),
                   checkmarkColor: AppTheme.primaryColor,
                 );
               }).toList(),
             ),
             const SizedBox(height: 32),
 
-            // 連絡先ID設定（非公開）
+            // 連絡先情報の管理
             Card(
               elevation: 0,
-              color: AppTheme.primaryColor.withOpacity(0.05),
+              color: AppTheme.primaryColor.withValues(alpha: 0.05),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -386,7 +526,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '連絡先ID設定（非公開）',
+                          '連絡先情報の管理',
                           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -395,103 +535,85 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'チャット時に相手に送信できるIDです。掲示板には表示されません。',
+                      '各連絡先の公開範囲を個別に設定できます。',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.textSecondary,
                           ),
                     ),
                     const SizedBox(height: 16),
 
-                    // 表示/非表示切り替えボタン
-                    TextButton.icon(
-                      onPressed: () {
-                        setState(() {
-                          _showSnsIds = !_showSnsIds;
-                        });
-                      },
-                      icon: Icon(
-                        _showSnsIds ? Icons.visibility_off : Icons.visibility,
-                      ),
-                      label: Text(
-                        _showSnsIds ? '連絡先IDを隠す' : '連絡先IDを設定する',
+                    // 連絡先編集画面へのボタン
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ContactEditScreen(),
+                            ),
+                          );
+                          // 画面から戻ってきたら連絡先情報を再読み込み
+                          _loadContactStatus();
+                        },
+                        icon: const Icon(Icons.contact_phone),
+                        label: const Text('連絡先情報を編集'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
-
-                    // SNS ID入力フィールド
-                    if (_showSnsIds) ...[
+                    
+                    // 現在の設定状況を表示
+                    if (_publicContactCount > 0 || _friendsOnlyContactCount > 0 || _privateContactCount > 0) ...[
                       const SizedBox(height: 16),
-                      
-                      // LINE ID
-                      _buildSnsIdField(
-                        label: 'LINE ID',
-                        controller: _lineIdController,
-                        icon: Icons.chat,
-                        hint: 'あなたのLINE ID',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // TikTok ID
-                      _buildSnsIdField(
-                        label: 'TikTok ID',
-                        controller: _tiktokIdController,
-                        icon: Icons.music_video,
-                        hint: '@なしで入力',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // KakaoTalk ID
-                      _buildSnsIdField(
-                        label: 'KakaoTalk ID',
-                        controller: _kakaoTalkIdController,
-                        icon: Icons.message,
-                        hint: 'KakaoTalk ID',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Instagram
-                      _buildSnsIdField(
-                        label: 'Instagram',
-                        controller: _instagramIdController,
-                        icon: Icons.photo_camera,
-                        hint: '@を含めて入力',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Telegram
-                      _buildSnsIdField(
-                        label: 'Telegram',
-                        controller: _telegramIdController,
-                        icon: Icons.send,
-                        hint: '@を含めて入力',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Signal
-                      _buildSnsIdField(
-                        label: 'Signal ID',
-                        controller: _signalIdController,
-                        icon: Icons.security,
-                        hint: 'Signal ID',
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 電話番号
-                      _buildSnsIdField(
-                        label: '電話番号',
-                        controller: _phoneNumberController,
-                        icon: Icons.phone,
-                        hint: '090-1234-5678',
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // 連絡用メールアドレス
-                      _buildSnsIdField(
-                        label: '連絡用メールアドレス',
-                        controller: _contactEmailController,
-                        icon: Icons.email,
-                        hint: 'contact@example.com',
-                        keyboardType: TextInputType.emailAddress,
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '現在の公開設定',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                if (_publicContactCount > 0) ...[
+                                  _buildStatusChip(
+                                    '全員に公開',
+                                    _publicContactCount,
+                                    Colors.red,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (_friendsOnlyContactCount > 0) ...[
+                                  _buildStatusChip(
+                                    'フレンドのみ',
+                                    _friendsOnlyContactCount,
+                                    Colors.orange,
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                if (_privateContactCount > 0)
+                                  _buildStatusChip(
+                                    '非公開',
+                                    _privateContactCount,
+                                    Colors.green,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],
@@ -501,6 +623,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+  
+  ImageProvider? _getImageProvider() {
+    if (kIsWeb && _webImageFile != null) {
+      // Web環境で新しい画像が選択された場合
+      // FutureBuilderを使って非同期で画像を読み込む必要があるため、
+      // 別の方法で実装する必要があります
+      return null;
+    } else if (!kIsWeb && _imageFile != null) {
+      return FileImage(_imageFile!);
+    } else if (_currentPhotoUrl != null) {
+      return NetworkImage(_currentPhotoUrl!);
+    }
+    return null;
+  }
+
+  bool _shouldShowInitial() {
+    if (kIsWeb && _webImageFile != null) return false;
+    if (!kIsWeb && _imageFile != null) return false;
+    if (_currentPhotoUrl != null) return false;
+    return true;
+  }
+  
+  Widget _buildStatusChip(String label, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

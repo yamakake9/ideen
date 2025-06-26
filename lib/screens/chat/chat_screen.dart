@@ -8,6 +8,7 @@ import '../../services/chat_service.dart';
 import '../../models/chat_model.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/id_share_dialog.dart';
+import '../profile/user_profile_screen.dart'; // 追加
 
 class ChatScreen extends StatefulWidget {
   final String chatRoomId;
@@ -164,8 +165,50 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: Text(widget.otherUserName),
+        title: InkWell(
+          onTap: () {
+            // タイトルをタップしてプロフィールへ
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UserProfileScreen(
+                  userId: widget.otherUserId,
+                ),
+              ),
+            );
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  widget.otherUserName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
         actions: [
+          // プロフィールボタン
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => UserProfileScreen(
+                    userId: widget.otherUserId,
+                  ),
+                ),
+              );
+            },
+          ),
           // ID交換申請ボタン
           if (!_isIdExchangeApproved && !_hasRequestedExchange)
             TextButton(

@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
+
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -44,6 +46,10 @@ class ProfileScreen extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final userData = authProvider.userData ?? {};
     
+    // デバッグ用
+    print('Profile Screen - photoUrl: ${userData['photoUrl']}');
+    print('Profile Screen - username: ${userData['username']}');
+    
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
@@ -51,12 +57,11 @@ class ProfileScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () {
-              // TODO: 設定画面へ
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('設定画面は開発中です'),
-                  duration: Duration(seconds: 2),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EditProfileScreen(),
                 ),
               );
             },
@@ -74,7 +79,7 @@ class ProfileScreen extends StatelessWidget {
                 color: AppTheme.surfaceColor,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
@@ -82,23 +87,50 @@ class ProfileScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
+
                   // アバター
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: AppTheme.primaryColor.withOpacity(0.2),
-                    child: Text(
-                      userData['username']?.isNotEmpty == true
-                          ? userData['username'][0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryColor,
-                      ),
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
                     ),
+                    clipBehavior: Clip.antiAlias,
+                    child: userData['photoUrl'] != null && userData['photoUrl'].toString().isNotEmpty
+                        ? Image.network(
+                            userData['photoUrl'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('Image load error: $error');
+                              return Center(
+                                child: Text(
+                                  userData['username']?.isNotEmpty == true
+                                      ? userData['username'][0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    fontSize: 40,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : Center(
+                            child: Text(
+                              userData['username']?.isNotEmpty == true
+                                  ? userData['username'][0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryColor,
+                              ),
+                            ),
+                          ),
                   ),
-                  const SizedBox(height: 16),
-                  
+
                   // ユーザー名
                   Text(
                     userData['username'] ?? '名前未設定',
@@ -130,13 +162,23 @@ class ProfileScreen extends StatelessWidget {
                   
                   // 編集ボタン
                   OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
+                    onPressed: () async {
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => const EditProfileScreen(),
                         ),
                       );
+                      // 編集画面から戻ってきたら画面を再構築
+                      if (context.mounted) {
+                        // 画面全体を再構築させるために、一度ホーム画面に戻ってから再度プロフィール画面を表示
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ProfileScreen(),
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.edit, size: 18),
                     label: const Text('プロフィールを編集'),
@@ -220,7 +262,7 @@ class ProfileScreen extends StatelessWidget {
                             hobby,
                             style: const TextStyle(fontSize: 12),
                           ),
-                          backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
+                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
                         );
                       }).toList(),
                     ),
