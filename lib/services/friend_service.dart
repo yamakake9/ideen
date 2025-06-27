@@ -15,7 +15,7 @@ class FriendService {
   Future<void> sendFriendRequest({
     required String toUserId,
     required String toUserName,
-    required String toUserPhotoUrl,
+    String toUserPhotoUrl = '',
   }) async {
     if (currentUserId == null) throw Exception('ログインしていません');
     if (currentUserId == toUserId) throw Exception('自分自身にフレンド申請はできません');
@@ -69,7 +69,7 @@ class FriendService {
     await _firestore.collection('friendRequests').add({
       'fromUserId': currentUserId,
       'toUserId': toUserId,
-      'fromUserName': currentUserData['displayName'] ?? '名無し',
+      'fromUserName': currentUserData['username'] ?? currentUserData['displayName'] ?? '名無し',
       'fromUserPhotoUrl': currentUserData['photoUrl'] ?? '',
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
@@ -271,6 +271,24 @@ class FriendService {
     return result.docs.isNotEmpty;
   }
 
+  /// フレンドリクエストが保留中かチェック
+  Future<bool> hasPendingRequest(String fromUserId, String toUserId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('friendRequests')
+          .where('fromUserId', isEqualTo: fromUserId)
+          .where('toUserId', isEqualTo: toUserId)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get();
+      
+      return querySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      print('Error checking pending request: $e');
+      return false;
+    }
+  }
+
   /// フレンド申請のステータスを取得
   Future<FriendRequestStatus?> getFriendRequestStatus(String userId) async {
     if (currentUserId == null) return null;
@@ -305,7 +323,7 @@ class FriendService {
   // ヘルパーメソッド
   Future<String> _getUserName(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
-    return doc.data()?['displayName'] ?? '名無し';
+    return doc.data()?['username'] ?? doc.data()?['displayName'] ?? '名無し';
   }
 
   Future<String> _getUserPhotoUrl(String userId) async {

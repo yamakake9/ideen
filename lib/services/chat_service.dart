@@ -160,6 +160,44 @@ class ChatService {
     });
   }
 
+  // チャット履歴があるかチェック
+  Future<bool> hasChatHistory(String userId1, String userId2) async {
+    try {
+      // 既存のチャットルームを検索
+      final existingRoom = await _firestore
+          .collection('chatRooms')
+          .where('participants', arrayContains: userId1)
+          .get();
+
+      String? chatRoomId;
+      for (var doc in existingRoom.docs) {
+        final participants = List<String>.from(doc.data()['participants']);
+        if (participants.contains(userId2)) {
+          chatRoomId = doc.id;
+          break;
+        }
+      }
+
+      if (chatRoomId == null) {
+        return false;
+      }
+
+      // メッセージが存在するかチェック（システムメッセージを除く）
+      final messages = await _firestore
+          .collection('chatRooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .where('senderId', isNotEqualTo: 'system')
+          .limit(1)
+          .get();
+
+      return messages.docs.isNotEmpty;
+    } catch (e) {
+      print('チャット履歴確認エラー: $e');
+      return false;
+    }
+  }
+
   // ID交換を申請
   Future<bool> requestIdExchange({
     required String chatRoomId,

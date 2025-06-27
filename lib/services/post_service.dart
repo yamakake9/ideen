@@ -19,20 +19,26 @@ class PostService {
       final docRef = _firestore.collection(_collection).doc();
       final now = DateTime.now();
       
-      final post = PostModel(
-        id: docRef.id,
-        userId: userId,
-        username: username,
-        displayId: displayId,
-        gender: userProfile['gender'] ?? '未設定',
-        prefecture: userProfile['prefecture'] ?? '未設定',
-        ageGroup: userProfile['ageGroup'] ?? '未設定',
-        message: message,
-        createdAt: now,
-        updatedAt: now,
-      );
+      // PostModelに合わせてデータを作成
+      final postData = {
+        'id': docRef.id,
+        'userId': userId,
+        'username': username,
+        'displayId': displayId,
+        'gender': userProfile['gender'] ?? '未設定',
+        'prefecture': userProfile['prefecture'] ?? '未設定',
+        'ageGroup': userProfile['ageGroup'] ?? '未設定',
+        'message': message,
+        'userProfile': {
+          'photoUrl': userProfile['photoUrl'] ?? '',
+          'bio': userProfile['bio'] ?? '',
+        },
+        'createdAt': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
+        'isActive': true,
+      };
 
-      await docRef.set(post.toFirestore());
+      await docRef.set(postData);
       return docRef.id;
     } catch (e) {
       print('投稿作成エラー: $e');
@@ -41,7 +47,7 @@ class PostService {
   }
 
   // 投稿一覧を取得（リアルタイム）
-  Stream<List<PostModel>> getPostsStream({int limit = 20}) {
+  Stream<List<Map<String, dynamic>>> getPostsStream({int limit = 20}) {
     return _firestore
         .collection(_collection)
         .orderBy('createdAt', descending: true)
@@ -50,7 +56,11 @@ class PostService {
         .map((snapshot) {
       return snapshot.docs
           .where((doc) => doc.data()['isActive'] != false)
-          .map((doc) => PostModel.fromFirestore(doc))
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data(),
+                'createdAt': (doc.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              })
           .toList();
     });
   }

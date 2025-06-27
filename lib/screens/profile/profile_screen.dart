@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
+import '../../models/friend_model.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -39,6 +40,117 @@ class ProfileScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildContactRow(String label, String value, IconData icon, {bool isLink = false}) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppTheme.textSecondary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value.isEmpty ? '未設定' : value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: isLink ? AppTheme.primaryColor : null,
+                  decoration: isLink ? TextDecoration.underline : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<List<Widget>> _buildPublicContactInfo(BuildContext context, Map<String, dynamic> userData) async {
+    final contactInfo = userData['contactInfo'];
+    if (contactInfo == null) return [];
+
+    final contact = ContactInfo.fromMap(contactInfo);
+    final visibleContacts = <Widget>[];
+
+    // Helper function to add contact row
+    void addContactRow(String label, String? value, IconData icon, ContactVisibility visibility, {bool isLink = false, String? prefix}) {
+      if (value != null && value.isNotEmpty && visibility == ContactVisibility.public) {
+        final displayValue = prefix != null ? '$prefix$value' : value;
+        visibleContacts.add(
+          Padding(
+            padding: EdgeInsets.only(bottom: visibleContacts.isNotEmpty ? 16 : 0),
+            child: _buildContactRow(label, displayValue, icon, isLink: isLink),
+          ),
+        );
+      }
+    }
+
+    // コミュニケーション系
+    addContactRow('LINE ID', contact.lineId, Icons.chat_bubble_outline, contact.lineVisibility);
+    addContactRow('Telegram', contact.telegramId, Icons.send, contact.telegramVisibility);
+    addContactRow('Signal', contact.signalId, Icons.security, contact.signalVisibility);
+    addContactRow('KakaoTalk', contact.kakaoTalkId, Icons.message, contact.kakaoVisibility);
+    
+    // SNS・発信系
+    addContactRow('Instagram', contact.instagramId, Icons.camera_alt_outlined, contact.instagramVisibility, isLink: true, prefix: '@');
+    addContactRow('TikTok', contact.tiktokId, Icons.music_video, contact.tiktokVisibility, isLink: true, prefix: '@');
+    addContactRow('X (Twitter)', contact.xId, Icons.tag, contact.xVisibility, isLink: true, prefix: '@');
+    
+    // ビジネス・その他
+    addContactRow('メールアドレス', contact.email, Icons.email_outlined, contact.emailVisibility);
+    addContactRow('電話番号', contact.phoneNumber, Icons.phone_outlined, contact.phoneVisibility);
+    addContactRow('Discord', contact.discordId, Icons.headset_mic_outlined, contact.discordVisibility);
+
+    return visibleContacts;
+  }
+
+  Future<List<Widget>> _buildFriendsOnlyContactInfo(BuildContext context, Map<String, dynamic> userData) async {
+    final contactInfo = userData['contactInfo'];
+    if (contactInfo == null) return [];
+
+    final contact = ContactInfo.fromMap(contactInfo);
+    final visibleContacts = <Widget>[];
+
+    // Helper function to add contact row
+    void addContactRow(String label, String? value, IconData icon, ContactVisibility visibility, {bool isLink = false, String? prefix}) {
+      if (value != null && value.isNotEmpty && visibility == ContactVisibility.friendsOnly) {
+        final displayValue = prefix != null ? '$prefix$value' : value;
+        visibleContacts.add(
+          Padding(
+            padding: EdgeInsets.only(bottom: visibleContacts.isNotEmpty ? 16 : 0),
+            child: _buildContactRow(label, displayValue, icon, isLink: isLink),
+          ),
+        );
+      }
+    }
+
+    // コミュニケーション系
+    addContactRow('LINE ID', contact.lineId, Icons.chat_bubble_outline, contact.lineVisibility);
+    addContactRow('Telegram', contact.telegramId, Icons.send, contact.telegramVisibility);
+    addContactRow('Signal', contact.signalId, Icons.security, contact.signalVisibility);
+    addContactRow('KakaoTalk', contact.kakaoTalkId, Icons.message, contact.kakaoVisibility);
+    
+    // SNS・発信系
+    addContactRow('Instagram', contact.instagramId, Icons.camera_alt_outlined, contact.instagramVisibility, isLink: true, prefix: '@');
+    addContactRow('TikTok', contact.tiktokId, Icons.music_video, contact.tiktokVisibility, isLink: true, prefix: '@');
+    addContactRow('X (Twitter)', contact.xId, Icons.tag, contact.xVisibility, isLink: true, prefix: '@');
+    
+    // ビジネス・その他
+    addContactRow('メールアドレス', contact.email, Icons.email_outlined, contact.emailVisibility);
+    addContactRow('電話番号', contact.phoneNumber, Icons.phone_outlined, contact.phoneVisibility);
+    addContactRow('Discord', contact.discordId, Icons.headset_mic_outlined, contact.discordVisibility);
+
+    return visibleContacts;
   }
 
   @override
@@ -87,7 +199,6 @@ class ProfileScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-
                   // アバター
                   Container(
                     width: 100,
@@ -130,6 +241,7 @@ class ProfileScreen extends StatelessWidget {
                             ),
                           ),
                   ),
+                  const SizedBox(height: 16),
 
                   // ユーザー名
                   Text(
@@ -169,16 +281,6 @@ class ProfileScreen extends StatelessWidget {
                           builder: (context) => const EditProfileScreen(),
                         ),
                       );
-                      // 編集画面から戻ってきたら画面を再構築
-                      if (context.mounted) {
-                        // 画面全体を再構築させるために、一度ホーム画面に戻ってから再度プロフィール画面を表示
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ProfileScreen(),
-                          ),
-                        );
-                      }
                     },
                     icon: const Icon(Icons.edit, size: 18),
                     label: const Text('プロフィールを編集'),
@@ -229,46 +331,134 @@ class ProfileScreen extends StatelessWidget {
                     authProvider.user?.email ?? '',
                     Icons.email_outlined,
                   ),
+                  
+                  // 趣味・興味を基本情報内に追加
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(Icons.interests_outlined, size: 20, color: AppTheme.textSecondary),
+                      const SizedBox(width: 12),
+                      Text(
+                        '趣味・興味',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  userData['hobbies']?.isNotEmpty == true
+                      ? Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: (userData['hobbies'] as List).map((hobby) {
+                            return Chip(
+                              label: Text(
+                                hobby,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
+                            );
+                          }).toList(),
+                        )
+                      : Text(
+                          '趣味・興味が設定されていません',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
                 ],
               ),
             ),
             
-            // 趣味・興味
-            if (userData['hobbies']?.isNotEmpty == true)
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: AppTheme.cardShadow,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '趣味・興味',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+            // 全員に公開中の連絡先情報
+            FutureBuilder<List<Widget>>(
+              future: _buildPublicContactInfo(context, userData),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: AppTheme.cardShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.public,
+                            size: 20,
+                            color: Colors.red[400],
                           ),
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: (userData['hobbies'] as List).map((hobby) {
-                        return Chip(
-                          label: Text(
-                            hobby,
-                            style: const TextStyle(fontSize: 12),
+                          const SizedBox(width: 8),
+                          Text(
+                            '全員に公開中の連絡先情報',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                           ),
-                          backgroundColor: AppTheme.primaryColor.withValues(alpha: 0.1),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      ...snapshot.data!,
+                    ],
+                  ),
+                );
+              },
+            ),
+            
+            // フレンドに公開中の連絡先情報
+            FutureBuilder<List<Widget>>(
+              future: _buildFriendsOnlyContactInfo(context, userData),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                
+                return Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: AppTheme.cardShadow,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.people,
+                            size: 20,
+                            color: Colors.orange[400],
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'フレンドに公開中の連絡先情報',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      ...snapshot.data!,
+                    ],
+                  ),
+                );
+              },
+            ),
             
             // アクション
             Container(

@@ -1,21 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../providers/auth_provider.dart';
-import '../../services/post_service.dart';
-import '../../services/chat_service.dart';
-import '../../models/post_model.dart';
-import '../../widgets/post/post_card.dart';
-import '../chat/chat_screen.dart';import '../../services/chat_service.dart';
-import '../chat/chat_screen.dart';// lib/screens/home/home_screen.dart
+// lib/screens/home/home_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/post_service.dart';
-import '../../models/post_model.dart';
+import '../../services/chat_service.dart';
 import '../../widgets/post/post_card.dart';
+import '../chat/chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -176,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<PostModel>>(
+      body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _postService.getPostsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -257,8 +249,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: PostCard(
-                    post: post.toFirestore()..['id'] = post.id,
-                    createdAt: post.createdAt,
+                    post: post,
+                    createdAt: post['createdAt'] ?? DateTime.now(),
                     onTap: () {
                       // TODO: 詳細画面へ
                     },
@@ -273,11 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       // チャットルームを作成または取得
                       final chatRoomId = await _chatService.createOrGetChatRoom(
                         userId1: currentUser.uid,
-                        userId2: post.userId,
+                        userId2: post['userId'],
                         user1Data: currentUserData,
                         user2Data: {
-                          'username': post.username,
-                          'profileImageUrl': '',
+                          'username': post['username'],
+                          'profileImageUrl': post['userProfile']?['photoUrl'] ?? '',
                         },
                       );
                       
@@ -287,16 +279,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
                               chatRoomId: chatRoomId,
-                              otherUserId: post.userId,
-                              otherUserName: post.username,
+                              otherUserId: post['userId'],
+                              otherUserName: post['username'],
                             ),
                           ),
                         );
                       }
                     },
-                    onDelete: post.userId == authProvider.user?.uid
+                    onDelete: post['userId'] == authProvider.user?.uid
                         ? () async {
-                            final success = await _postService.deletePost(post.id);
+                            final success = await _postService.deletePost(post['id']);
                             if (success && mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -307,9 +299,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
                           }
                         : null,
-                    onReport: post.userId != authProvider.user?.uid
+                    onReport: post['userId'] != authProvider.user?.uid
                         ? () async {
-                            final success = await _postService.reportPost(post.id);
+                            final success = await _postService.reportPost(post['id']);
                             if (success && mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

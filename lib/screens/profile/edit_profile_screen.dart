@@ -58,16 +58,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (userData != null) {
       _usernameController.text = userData['username'] ?? '';
       _bioController.text = userData['bio'] ?? '';
-      _selectedGender = userData['gender'] ?? '未設定';
-      _selectedPrefecture = userData['prefecture'] ?? '未設定';
-      _selectedAgeGroup = userData['ageGroup'] ?? '未設定';
+      
+      // ドロップダウンの値が選択肢に含まれているか確認
+      final gender = userData['gender'];
+      _selectedGender = (gender != null && AppConstants.genderOptions.contains(gender)) 
+          ? gender 
+          : AppConstants.genderOptions.first;
+      
+      final prefecture = userData['prefecture'];
+      _selectedPrefecture = (prefecture != null && AppConstants.prefectureOptions.contains(prefecture))
+          ? prefecture
+          : AppConstants.prefectureOptions.first;
+      
+      final ageGroup = userData['ageGroup'];
+      _selectedAgeGroup = (ageGroup != null && AppConstants.ageGroupOptions.contains(ageGroup))
+          ? ageGroup
+          : AppConstants.ageGroupOptions.first;
+      
       _selectedHobbies = List<String>.from(userData['hobbies'] ?? []);
       _currentPhotoUrl = userData['photoUrl'];
+    } else {
+      // 新規ユーザーの場合はデフォルト値を設定
+      _selectedGender = AppConstants.genderOptions.first;
+      _selectedPrefecture = AppConstants.prefectureOptions.first;
+      _selectedAgeGroup = AppConstants.ageGroupOptions.first;
     }
   }
 
   void _loadContactStatus() async {
-          final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
+    final authProvider = Provider.of<app_auth.AuthProvider>(context, listen: false);
     final userId = authProvider.user?.uid;
     if (userId == null) return;
 
@@ -258,7 +277,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             backgroundColor: AppTheme.successColor,
           ),
         );
-        Navigator.pop(context);
+        // 単純にpopで前の画面に戻る
+        Navigator.of(context).pop();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -427,7 +447,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               }).toList(),
               onChanged: (value) {
                 setState(() {
-                  _selectedGender = value ?? '未設定';
+                  _selectedGender = value ?? AppConstants.genderOptions.first;
                 });
               },
             ),
@@ -448,7 +468,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               }).toList(),
               onChanged: (value) {
                 setState(() {
-                  _selectedPrefecture = value ?? '未設定';
+                  _selectedPrefecture = value ?? AppConstants.prefectureOptions.first;
                 });
               },
             ),
@@ -469,7 +489,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               }).toList(),
               onChanged: (value) {
                 setState(() {
-                  _selectedAgeGroup = value ?? '未設定';
+                  _selectedAgeGroup = value ?? AppConstants.ageGroupOptions.first;
                 });
               },
             ),
